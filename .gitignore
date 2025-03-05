@@ -1,0 +1,35 @@
+# Environment variables
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+api_debug.log
+api_error.log
+
+# Testing
+test-reports/
+coverage/
+
+# Production build
+dist/
+build/
+
+# Misc
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
