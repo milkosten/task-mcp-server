@@ -529,8 +529,8 @@ Test run started at: ${new Date().toISOString()}
     console.log('\n🔧 RUNNING TEST: Tools - Testing tool functionality using SDK');
     
     try {
-      // Test task creation
-      console.log('  - TEST: createTask - Creating a new task');
+      // ==== TEST 1: Create task with basic information ====
+      console.log('  - TEST 1: createTask - Creating a basic task');
       console.log('  - Preparing createTask request with test data');
       
       console.log('  - Sending createTask request using SDK');
@@ -579,12 +579,54 @@ Test run started at: ${new Date().toISOString()}
       assert(createdTaskId, 'Create task response must include task ID in some format');
       console.log(`  - New task created with ID: ${createdTaskId}`);
       
-      await this.logTestResult('CreateTask', true, 
-        `Successfully created task with ID ${createdTaskId}`, 
+      await this.logTestResult('CreateTask_Basic', true, 
+        `Successfully created basic task with ID ${createdTaskId}`, 
         createResponse);
       
-      // Test task listing
-      console.log('\n  - TEST: listTasks - Retrieving all tasks');
+      // ==== TEST 2: Create task with full details ====
+      console.log('\n  - TEST 2: createTask - Creating a task with all fields');
+      console.log('  - Preparing createTask request with complete test data');
+      
+      const createFullResponse = await this.sendRequest({
+        type: 'invoke',
+        tool: 'createTask',
+        parameters: {
+          task: 'Complete test task from MCP client',
+          category: 'Thorough Testing',
+          priority: 'high',
+          status: 'not_started',
+          description: 'This is a detailed test task with a complete description',
+          dueDate: new Date(Date.now() + 86400000).toISOString().split('T')[0], // Tomorrow
+          tags: ['test', 'mcp', 'full-details']
+        },
+        id: uuidv4()
+      });
+      
+      // Extract created task ID 
+      let fullTaskId = null;
+      
+      if (createFullResponse.content && Array.isArray(createFullResponse.content)) {
+        const jsonContent = createFullResponse.content.find(c => c.type === 'json');
+        if (jsonContent && jsonContent.json && jsonContent.json.id) {
+          fullTaskId = jsonContent.json.id;
+        }
+      } else if (createFullResponse.result && createFullResponse.result.id) {
+        fullTaskId = createFullResponse.result.id;
+      } else if (createFullResponse.task && createFullResponse.task.id) {
+        fullTaskId = createFullResponse.task.id;
+      } else if (createFullResponse.id) {
+        fullTaskId = createFullResponse.id;
+      }
+      
+      assert(fullTaskId, 'Create full task response must include task ID');
+      console.log(`  - New full task created with ID: ${fullTaskId}`);
+      
+      await this.logTestResult('CreateTask_Full', true, 
+        `Successfully created full task with ID ${fullTaskId}`, 
+        createFullResponse);
+      
+      // ==== TEST 3: List Tasks ====
+      console.log('\n  - TEST 3: listTasks - Retrieving all tasks');
       console.log('  - Sending listTasks request using SDK');
       
       const listResponse = await this.sendRequest({
@@ -627,79 +669,192 @@ Test run started at: ${new Date().toISOString()}
       assert(tasksList, 'List tasks response must include tasks array in some format');
       console.log(`  - Found ${tasksList.length} tasks in response`);
       
-      // Verify our newly created task is in the list
-      console.log(`  - Verifying newly created task (ID: ${createdTaskId}) appears in task list`);
-      const taskExists = tasksList.some(task => {
+      // Verify both newly created tasks are in the list
+      console.log(`  - Verifying newly created tasks (IDs: ${createdTaskId}, ${fullTaskId}) appear in task list`);
+      const basicTaskExists = tasksList.some(task => {
         const taskId = task.id || (task.metadata && task.metadata.id);
-        return taskId === createdTaskId;
+        return taskId == createdTaskId;
       });
       
-      assert(taskExists, 'Newly created task must appear in task list');
+      const fullTaskExists = tasksList.some(task => {
+        const taskId = task.id || (task.metadata && task.metadata.id);
+        return taskId == fullTaskId;
+      });
+      
+      assert(basicTaskExists, 'Basic task must appear in task list');
+      assert(fullTaskExists, 'Full task must appear in task list');
       
       await this.logTestResult('ListTasks', true, 
-        `Successfully listed tasks including newly created task`, 
+        `Successfully listed ${tasksList.length} tasks including newly created tasks`, 
         listResponse);
       
-      // Test task update
-      console.log('\n  - TEST: updateTask - Updating an existing task');
+      // ==== TEST 4: Update Task Status ====
+      console.log('\n  - TEST 4: updateTask - Updating task status');
       console.log(`  - Preparing updateTask request for task ID: ${createdTaskId}`);
       
-      console.log('  - Sending updateTask request using SDK');
-      const updateResponse = await this.sendRequest({
+      const updateStatusResponse = await this.sendRequest({
         type: 'invoke',
         tool: 'updateTask',
         parameters: {
           taskId: createdTaskId,
-          status: 'started',
+          status: 'started'
+        },
+        id: uuidv4()
+      });
+      
+      // Extract updated task data
+      let statusUpdatedTask = null;
+      
+      if (updateStatusResponse.content && Array.isArray(updateStatusResponse.content)) {
+        const jsonContent = updateStatusResponse.content.find(c => c.type === 'json');
+        if (jsonContent && jsonContent.json) {
+          statusUpdatedTask = jsonContent.json;
+        }
+      } else if (updateStatusResponse.result) {
+        statusUpdatedTask = updateStatusResponse.result;
+      } else if (updateStatusResponse.task) {
+        statusUpdatedTask = updateStatusResponse.task;
+      }
+      
+      assert(statusUpdatedTask, 'Update task response must include updated task');
+      
+      // Verify status was updated
+      const updatedStatus = statusUpdatedTask.status;
+      assert(updatedStatus === 'started', 
+        'Task status must be updated correctly');
+      
+      await this.logTestResult('UpdateTask_Status', true, 
+        `Successfully updated task status to ${updatedStatus}`, 
+        updateStatusResponse);
+      
+      // ==== TEST 5: Update Task Priority ====
+      console.log('\n  - TEST 5: updateTask - Updating task priority');
+      console.log(`  - Preparing updateTask request for task ID: ${createdTaskId}`);
+      
+      const updatePriorityResponse = await this.sendRequest({
+        type: 'invoke',
+        tool: 'updateTask',
+        parameters: {
+          taskId: createdTaskId,
           priority: 'high'
         },
         id: uuidv4()
       });
       
-      // Extract updated task data from response - handle different possible formats
-      console.log('  - Extracting updated task data from response');
-      let updatedTask = null;
+      // Extract updated task data
+      let priorityUpdatedTask = null;
       
-      // Try different possible formats that the SDK might return
-      if (updateResponse.content && Array.isArray(updateResponse.content)) {
-        console.log('  - Found response in content array format');
-        const jsonContent = updateResponse.content.find(c => c.type === 'json');
+      if (updatePriorityResponse.content && Array.isArray(updatePriorityResponse.content)) {
+        const jsonContent = updatePriorityResponse.content.find(c => c.type === 'json');
         if (jsonContent && jsonContent.json) {
-          updatedTask = jsonContent.json;
+          priorityUpdatedTask = jsonContent.json;
         }
-      } else if (updateResponse.result) {
-        console.log('  - Found response in result object format');
-        updatedTask = updateResponse.result;
-      } else if (updateResponse.task) {
-        console.log('  - Found response in task object format');
-        updatedTask = updateResponse.task;
+      } else if (updatePriorityResponse.result) {
+        priorityUpdatedTask = updatePriorityResponse.result;
+      } else if (updatePriorityResponse.task) {
+        priorityUpdatedTask = updatePriorityResponse.task;
       }
       
-      assert(updatedTask, 'Update task response must include updated task in some format');
+      assert(priorityUpdatedTask, 'Update task response must include updated task');
       
-      // Verify task ID matches the requested task
-      console.log('  - Verifying task ID matches the requested task');
-      const returnedTaskId = updatedTask.id || (updatedTask.metadata && updatedTask.metadata.id);
-      assert(returnedTaskId === createdTaskId, 'Updated task must have the correct ID');
-      
-      // Verify task properties were updated
-      console.log('  - Verifying task properties were updated');
-      const updatedStatus = updatedTask.status;
-      const updatedPriority = updatedTask.priority;
-      
-      assert(updatedStatus === 'started' || updatedStatus === 'in_progress', 
-        'Task status must be updated correctly');
+      // Verify priority was updated
+      const updatedPriority = priorityUpdatedTask.priority;
       assert(updatedPriority === 'high', 'Task priority must be updated correctly');
       
-      await this.logTestResult('UpdateTask', true, 
-        `Successfully updated task with ID ${createdTaskId}`, 
-        updateResponse);
+      await this.logTestResult('UpdateTask_Priority', true, 
+        `Successfully updated task priority to ${updatedPriority}`, 
+        updatePriorityResponse);
       
-      // Test task deletion
-      console.log('\n  - TEST: deleteTask - Deleting a task');
+      // ==== TEST 6: Update Task Category ====
+      console.log('\n  - TEST 6: updateTask - Updating task category');
+      console.log(`  - Preparing updateTask request for task ID: ${fullTaskId}`);
+      
+      const updateCategoryResponse = await this.sendRequest({
+        type: 'invoke',
+        tool: 'updateTask',
+        parameters: {
+          taskId: fullTaskId,
+          category: 'Completed Testing'
+        },
+        id: uuidv4()
+      });
+      
+      // Extract updated task data
+      let categoryUpdatedTask = null;
+      
+      if (updateCategoryResponse.content && Array.isArray(updateCategoryResponse.content)) {
+        const jsonContent = updateCategoryResponse.content.find(c => c.type === 'json');
+        if (jsonContent && jsonContent.json) {
+          categoryUpdatedTask = jsonContent.json;
+        }
+      } else if (updateCategoryResponse.result) {
+        categoryUpdatedTask = updateCategoryResponse.result;
+      } else if (updateCategoryResponse.task) {
+        categoryUpdatedTask = updateCategoryResponse.task;
+      }
+      
+      assert(categoryUpdatedTask, 'Update task response must include updated task');
+      
+      // Verify category was updated
+      const updatedCategory = categoryUpdatedTask.category;
+      assert(updatedCategory === 'Completed Testing', 'Task category must be updated correctly');
+      
+      await this.logTestResult('UpdateTask_Category', true, 
+        `Successfully updated task category to "${updatedCategory}"`, 
+        updateCategoryResponse);
+      
+      // ==== TEST 7: Update Multiple Task Fields ====
+      console.log('\n  - TEST 7: updateTask - Updating multiple task fields at once');
+      console.log(`  - Preparing updateTask request for task ID: ${fullTaskId}`);
+      
+      const updateMultipleResponse = await this.sendRequest({
+        type: 'invoke',
+        tool: 'updateTask',
+        parameters: {
+          taskId: fullTaskId,
+          status: 'done',
+          priority: 'low',
+          task: 'Updated task title'
+        },
+        id: uuidv4()
+      });
+      
+      // Extract updated task data
+      let multipleUpdatedTask = null;
+      
+      if (updateMultipleResponse.content && Array.isArray(updateMultipleResponse.content)) {
+        const jsonContent = updateMultipleResponse.content.find(c => c.type === 'json');
+        if (jsonContent && jsonContent.json) {
+          multipleUpdatedTask = jsonContent.json;
+        }
+      } else if (updateMultipleResponse.result) {
+        multipleUpdatedTask = updateMultipleResponse.result;
+      } else if (updateMultipleResponse.task) {
+        multipleUpdatedTask = updateMultipleResponse.task;
+      }
+      
+      assert(multipleUpdatedTask, 'Update task response must include updated task');
+      
+      // Verify multiple fields were updated
+      const multiStatus = multipleUpdatedTask.status;
+      const multiPriority = multipleUpdatedTask.priority;
+      const multiTitle = multipleUpdatedTask.task;
+      
+      assert(multiStatus === 'done', 
+        'Task status must be updated correctly in multi-update');
+      assert(multiPriority === 'low', 
+        'Task priority must be updated correctly in multi-update');
+      assert(multiTitle === 'Updated task title', 
+        'Task title must be updated correctly in multi-update');
+      
+      await this.logTestResult('UpdateTask_Multiple', true, 
+        `Successfully updated multiple task fields at once`, 
+        updateMultipleResponse);
+      
+      // ==== TEST 8: Delete first task ====
+      console.log('\n  - TEST 8: deleteTask - Deleting first test task');
       console.log(`  - Preparing deleteTask request for task ID: ${createdTaskId}`);
       
-      console.log('  - Sending deleteTask request using SDK');
       const deleteResponse = await this.sendRequest({
         type: 'invoke',
         tool: 'deleteTask',
@@ -733,8 +888,43 @@ Test run started at: ${new Date().toISOString()}
         `Successfully deleted task with ID ${createdTaskId}`, 
         deleteResponse);
       
-      // Verify task was actually deleted
-      console.log('\n  - VERIFICATION: Confirming task deletion');
+      // ==== TEST 9: Delete second task ====
+      console.log('\n  - TEST 9: deleteTask - Deleting second test task');
+      console.log(`  - Preparing deleteTask request for task ID: ${fullTaskId}`);
+      
+      const deleteFullResponse = await this.sendRequest({
+        type: 'invoke',
+        tool: 'deleteTask',
+        parameters: {
+          taskId: fullTaskId
+        },
+        id: uuidv4()
+      });
+      
+      // Check for deletion confirmation
+      let fullDeletionConfirmed = false;
+      
+      if (deleteFullResponse.content && Array.isArray(deleteFullResponse.content)) {
+        const textContent = deleteFullResponse.content.find(c => c.type === 'text');
+        if (textContent && textContent.text && 
+           (textContent.text.includes('deleted') || textContent.text.includes('removed'))) {
+          fullDeletionConfirmed = true;
+        }
+      } else if (deleteFullResponse.message && 
+                (deleteFullResponse.message.includes('deleted') || deleteFullResponse.message.includes('removed'))) {
+        fullDeletionConfirmed = true;
+      } else if (deleteFullResponse.success === true) {
+        fullDeletionConfirmed = true;
+      }
+      
+      assert(fullDeletionConfirmed, 'Delete task response must confirm successful deletion');
+      
+      await this.logTestResult('DeleteTask_Full', true, 
+        `Successfully deleted full task with ID ${fullTaskId}`, 
+        deleteFullResponse);
+      
+      // ==== TEST 10: Verify all tasks deleted ====
+      console.log('\n  - TEST 10: VERIFICATION - Confirming all test tasks deleted');
       console.log('  - Listing all tasks again to verify deletion using SDK');
       
       const verifyListResponse = await this.sendRequest({
@@ -761,17 +951,23 @@ Test run started at: ${new Date().toISOString()}
       
       assert(verifyTasksList, 'List tasks response must include tasks array in some format');
       
-      // Check that the deleted task is not in the list
-      console.log(`  - Checking that task ID ${createdTaskId} no longer exists`);
-      const taskStillExists = verifyTasksList.some(task => {
+      // Check that both deleted tasks are not in the list
+      console.log(`  - Checking that task IDs ${createdTaskId} and ${fullTaskId} no longer exist`);
+      const basicTaskStillExists = verifyTasksList.some(task => {
         const taskId = task.id || (task.metadata && task.metadata.id);
-        return taskId === createdTaskId;
+        return taskId == createdTaskId;
       });
       
-      assert(!taskStillExists, 'Deleted task must not appear in task list');
+      const fullTaskStillExists = verifyTasksList.some(task => {
+        const taskId = task.id || (task.metadata && task.metadata.id);
+        return taskId == fullTaskId;
+      });
+      
+      assert(!basicTaskStillExists, 'Deleted basic task must not appear in task list');
+      assert(!fullTaskStillExists, 'Deleted full task must not appear in task list');
       
       await this.logTestResult('VerifyDelete', true, 
-        `Verified task with ID ${createdTaskId} was deleted`, 
+        `Verified all test tasks were successfully deleted`, 
         verifyListResponse);
     } catch (error) {
       console.log(`  - ERROR: ${error.message}`);

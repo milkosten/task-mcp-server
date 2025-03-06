@@ -10,6 +10,8 @@ node_modules/
 package-lock.json
 yarn.lock
 
+CLAUDE.md
+
 # Logs
 logs/
 *.log
