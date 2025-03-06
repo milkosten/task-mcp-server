@@ -718,13 +718,36 @@ Test run started at: ${new Date().toISOString()}
       
       assert(statusUpdatedTask, 'Update task response must include updated task');
       
-      // Verify status was updated
+      // Verify status was updated in the response
       const updatedStatus = statusUpdatedTask.status;
-      assert(updatedStatus === 'started', 
-        'Task status must be updated correctly');
+      assert(updatedStatus === 'started', 'Task status must be updated correctly in response');
+      
+      // Verify status change persisted by retrieving the task
+      console.log(`  - Verifying status change persisted by retrieving task with ID: ${createdTaskId}`);
+      const verifyStatusResponse = await this.sendRequest({
+        type: 'resource',
+        uri: `tasks://task/${createdTaskId}`,
+        id: uuidv4()
+      });
+      
+      // Extract task data from response
+      let retrievedTaskStatus = null;
+      if (verifyStatusResponse.contents && verifyStatusResponse.contents.length > 0) {
+        retrievedTaskStatus = verifyStatusResponse.contents[0].metadata;
+      } else if (verifyStatusResponse.content && verifyStatusResponse.content.length > 0) {
+        retrievedTaskStatus = verifyStatusResponse.content[0].metadata;
+      } else if (verifyStatusResponse.task) {
+        retrievedTaskStatus = verifyStatusResponse.task;
+      }
+      
+      assert(retrievedTaskStatus, 'Task must be retrievable after update');
+      const persistedStatus = retrievedTaskStatus.status;
+      assert(persistedStatus === 'started', 
+        `Task status must persist in database (got: ${persistedStatus}, expected: started)`);
+      console.log(`  - Verified: Task status persisted as '${persistedStatus}'`);
       
       await this.logTestResult('UpdateTask_Status', true, 
-        `Successfully updated task status to ${updatedStatus}`, 
+        `Successfully updated and verified task status to ${updatedStatus}`, 
         updateStatusResponse);
       
       // ==== TEST 5: Update Task Priority ====
@@ -757,12 +780,36 @@ Test run started at: ${new Date().toISOString()}
       
       assert(priorityUpdatedTask, 'Update task response must include updated task');
       
-      // Verify priority was updated
+      // Verify priority was updated in the response
       const updatedPriority = priorityUpdatedTask.priority;
-      assert(updatedPriority === 'high', 'Task priority must be updated correctly');
+      assert(updatedPriority === 'high', 'Task priority must be updated correctly in response');
+      
+      // Verify priority change persisted by retrieving the task
+      console.log(`  - Verifying priority change persisted by retrieving task with ID: ${createdTaskId}`);
+      const verifyPriorityResponse = await this.sendRequest({
+        type: 'resource',
+        uri: `tasks://task/${createdTaskId}`,
+        id: uuidv4()
+      });
+      
+      // Extract task data from response
+      let retrievedTaskPriority = null;
+      if (verifyPriorityResponse.contents && verifyPriorityResponse.contents.length > 0) {
+        retrievedTaskPriority = verifyPriorityResponse.contents[0].metadata;
+      } else if (verifyPriorityResponse.content && verifyPriorityResponse.content.length > 0) {
+        retrievedTaskPriority = verifyPriorityResponse.content[0].metadata;
+      } else if (verifyPriorityResponse.task) {
+        retrievedTaskPriority = verifyPriorityResponse.task;
+      }
+      
+      assert(retrievedTaskPriority, 'Task must be retrievable after update');
+      const persistedPriority = retrievedTaskPriority.priority;
+      assert(persistedPriority === 'high', 
+        `Task priority must persist in database (got: ${persistedPriority}, expected: high)`);
+      console.log(`  - Verified: Task priority persisted as '${persistedPriority}'`);
       
       await this.logTestResult('UpdateTask_Priority', true, 
-        `Successfully updated task priority to ${updatedPriority}`, 
+        `Successfully updated and verified task priority to ${updatedPriority}`, 
         updatePriorityResponse);
       
       // ==== TEST 6: Update Task Category ====
@@ -795,12 +842,36 @@ Test run started at: ${new Date().toISOString()}
       
       assert(categoryUpdatedTask, 'Update task response must include updated task');
       
-      // Verify category was updated
+      // Verify category was updated in the response
       const updatedCategory = categoryUpdatedTask.category;
-      assert(updatedCategory === 'Completed Testing', 'Task category must be updated correctly');
+      assert(updatedCategory === 'Completed Testing', 'Task category must be updated correctly in response');
+      
+      // Verify category change persisted by retrieving the task
+      console.log(`  - Verifying category change persisted by retrieving task with ID: ${fullTaskId}`);
+      const verifyCategoryResponse = await this.sendRequest({
+        type: 'resource',
+        uri: `tasks://task/${fullTaskId}`,
+        id: uuidv4()
+      });
+      
+      // Extract task data from response
+      let retrievedTaskCategory = null;
+      if (verifyCategoryResponse.contents && verifyCategoryResponse.contents.length > 0) {
+        retrievedTaskCategory = verifyCategoryResponse.contents[0].metadata;
+      } else if (verifyCategoryResponse.content && verifyCategoryResponse.content.length > 0) {
+        retrievedTaskCategory = verifyCategoryResponse.content[0].metadata;
+      } else if (verifyCategoryResponse.task) {
+        retrievedTaskCategory = verifyCategoryResponse.task;
+      }
+      
+      assert(retrievedTaskCategory, 'Task must be retrievable after update');
+      const persistedCategory = retrievedTaskCategory.category;
+      assert(persistedCategory === 'Completed Testing', 
+        `Task category must persist in database (got: ${persistedCategory}, expected: Completed Testing)`);
+      console.log(`  - Verified: Task category persisted as '${persistedCategory}'`);
       
       await this.logTestResult('UpdateTask_Category', true, 
-        `Successfully updated task category to "${updatedCategory}"`, 
+        `Successfully updated and verified task category to "${updatedCategory}"`, 
         updateCategoryResponse);
       
       // ==== TEST 7: Update Multiple Task Fields ====
@@ -835,20 +906,57 @@ Test run started at: ${new Date().toISOString()}
       
       assert(multipleUpdatedTask, 'Update task response must include updated task');
       
-      // Verify multiple fields were updated
+      // Verify multiple fields were updated in the response
       const multiStatus = multipleUpdatedTask.status;
       const multiPriority = multipleUpdatedTask.priority;
       const multiTitle = multipleUpdatedTask.task;
       
       assert(multiStatus === 'done', 
-        'Task status must be updated correctly in multi-update');
+        'Task status must be updated correctly in multi-update response');
       assert(multiPriority === 'low', 
-        'Task priority must be updated correctly in multi-update');
+        'Task priority must be updated correctly in multi-update response');
       assert(multiTitle === 'Updated task title', 
-        'Task title must be updated correctly in multi-update');
+        'Task title must be updated correctly in multi-update response');
+      
+      // Verify all changes persisted by retrieving the task
+      console.log(`  - Verifying multiple changes persisted by retrieving task with ID: ${fullTaskId}`);
+      const verifyMultipleResponse = await this.sendRequest({
+        type: 'resource',
+        uri: `tasks://task/${fullTaskId}`,
+        id: uuidv4()
+      });
+      
+      // Extract task data from response
+      let retrievedMultiTask = null;
+      if (verifyMultipleResponse.contents && verifyMultipleResponse.contents.length > 0) {
+        retrievedMultiTask = verifyMultipleResponse.contents[0].metadata;
+      } else if (verifyMultipleResponse.content && verifyMultipleResponse.content.length > 0) {
+        retrievedMultiTask = verifyMultipleResponse.content[0].metadata;
+      } else if (verifyMultipleResponse.task) {
+        retrievedMultiTask = verifyMultipleResponse.task;
+      }
+      
+      assert(retrievedMultiTask, 'Task must be retrievable after multi-field update');
+      
+      // Verify all fields were persisted correctly
+      const persistedMultiStatus = retrievedMultiTask.status;
+      const persistedMultiPriority = retrievedMultiTask.priority;
+      const persistedMultiTitle = retrievedMultiTask.task;
+      
+      assert(persistedMultiStatus === 'done', 
+        `Task status must persist in database (got: ${persistedMultiStatus}, expected: done)`);
+      assert(persistedMultiPriority === 'low', 
+        `Task priority must persist in database (got: ${persistedMultiPriority}, expected: low)`);
+      assert(persistedMultiTitle === 'Updated task title', 
+        `Task title must persist in database (got: ${persistedMultiTitle}, expected: Updated task title)`);
+      
+      console.log(`  - Verified: All task fields persisted correctly`);
+      console.log(`    - Status: '${persistedMultiStatus}'`);
+      console.log(`    - Priority: '${persistedMultiPriority}'`);
+      console.log(`    - Title: '${persistedMultiTitle}'`);
       
       await this.logTestResult('UpdateTask_Multiple', true, 
-        `Successfully updated multiple task fields at once`, 
+        `Successfully updated and verified multiple task fields at once`, 
         updateMultipleResponse);
       
       // ==== TEST 8: Delete first task ====
