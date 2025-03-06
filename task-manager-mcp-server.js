@@ -401,10 +401,11 @@ async function makeApiRequest(method, endpoint, data = null, params = null) {
     headers["Connection"] = "close";  // Don't keep connection alive
     headers["Cache-Control"] = "no-cache";  // Bypass cache
     
-    // For tasks endpoint, use a specific content type that works better on Windows
-    if (endpoint === "/tasks") {
-      headers["Content-Type"] = "application/json; charset=utf-8";
-    }
+    // For all endpoints, use a specific content type that works better on Windows
+    headers["Content-Type"] = "application/json; charset=utf-8";
+    
+    // Add Accept header that works better with Windows
+    headers["Accept"] = "application/json, text/plain, */*";
   }
 
   try {
@@ -433,14 +434,22 @@ async function makeApiRequest(method, endpoint, data = null, params = null) {
       requestConfig.maxRedirects = 0; // Avoid redirects on Windows
       requestConfig.decompress = false; // Disable automatic decompression on Windows
       
-      // Force application/json for DATA encoding
+      // Ensure proper data encoding for all requests on Windows
       if (data) {
         requestConfig.data = JSON.stringify(data);
-        requestConfig.transformRequest = [(data, headers) => {
-          // Force the proper content type and return serialized data
-          headers['Content-Type'] = 'application/json; charset=utf-8';
-          return data; // data already stringified above
-        }];
+      }
+      
+      // Add transform request for properly handling all requests on Windows
+      requestConfig.transformRequest = [(data, headers) => {
+        // Force proper content type
+        headers['Content-Type'] = 'application/json; charset=utf-8';
+        return typeof data === 'string' ? data : JSON.stringify(data);
+      }];
+      
+      // Add specific URL handling for individual task endpoints
+      if (endpoint.startsWith('/tasks/') && method === 'GET') {
+        // Fix to retrieve individual task by adding specific query parameters
+        requestConfig.params = { ...params, id: endpoint.split('/')[2] };
       }
     }
     
@@ -558,9 +567,29 @@ server.resource(
   async (uri, params) => {
     try {
       // Get all tasks and find the one we want
-      // (A direct endpoint would be more efficient in a real API)
-      const tasks = await makeApiRequest("GET", "/tasks");
-      const task = tasks.tasks.find((t) => t.id === Number(params.taskId));
+      // Windows requires a different approach for fetching individual tasks
+      const isWindows = process.platform === 'win32';
+      
+      let task;
+      if (isWindows) {
+        // On Windows, we need a workaround to get a specific task
+        // First try direct task endpoint
+        try {
+          const taskResult = await makeApiRequest("GET", `/tasks/${params.taskId}`);
+          if (taskResult && (taskResult.id || taskResult.task)) {
+            task = taskResult;
+          }
+        } catch (directError) {
+          console.log(`Direct task fetch failed, using task list fallback: ${directError.message}`);
+          // Fallback to getting all tasks and filtering
+          const tasks = await makeApiRequest("GET", "/tasks");
+          task = tasks.tasks.find((t) => t.id === Number(params.taskId) || t.id === params.taskId);
+        }
+      } else {
+        // Non-Windows approach
+        const tasks = await makeApiRequest("GET", "/tasks");
+        task = tasks.tasks.find((t) => t.id === Number(params.taskId));
+      }
       
       if (!task) {
         return {

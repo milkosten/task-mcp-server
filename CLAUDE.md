@@ -6,13 +6,18 @@
 - Test mock client: `node mcp-client-test-mock.js` (uses simulated responses, no API needed)
 - Run standalone server: `node mcp-server-standalone.js`
 - View test reports: Check `./test-reports/test-log.txt` for detailed results
-- Debug specific tests: Edit mcp-client-test.js (McpTestClient handles all test cases)
+- Run specific tests: Edit `mcp-client-test.js` and comment out unwanted test sections in the `runTests()` method (around line 317):
+  - `await this.runDiscoveryTest()` - Tests server discovery
+  - `await this.runResourceTests()` - Tests resources
+  - `await this.runToolTests()` - Tests tools
+  - `await this.runPromptTests()` - Tests prompts
 - Lint/format: Not specified in codebase (consider adding ESLint/Prettier)
 
 ## Environment Setup
 - Configure with `.env` file (copy from `.env.example`)
 - Required variables: `TASK_MANAGER_API_KEY`, `TASK_MANAGER_API_BASE_URL`
 - Developer setup: Run `npm install` to install required dependencies
+- Node.js 18+ required (specified in package.json)
 
 ## Code Style
 - **Project type**: ES Modules (not CommonJS)
