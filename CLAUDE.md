@@ -14,7 +14,6 @@
   }
   ```
 - Test logs: Check `./test-reports/test-log.txt` for detailed output
-- API logs: `api_debug.log` and `api_error.log` contain transaction details
 
 ## Environment Setup
 - Configure: Create `.env` file with required variables:
@@ -34,11 +33,11 @@
 - **Async**: Prefer async/await over Promise chains
 - **API**: Axios with consistent headers and error handling
 - **Protocol**: MCP 1.6.1 specification (@modelcontextprotocol/sdk)
-- **Docs**: JSDoc comments for public functions
-- **Response**: Flexible data extraction for varied API responses
+- **Logging**: File-based logging (api_debug.log, api_error.log) instead of console.log in server code
 
-## Logging Guidelines
-- **IMPORTANT**: Avoid `console.log` in the main server code - it interferes with stdio MCP communication
-- Use file-based logging for debugging (api_debug.log, api_error.log)
-- For HTTP server mode, console logs are acceptable
-- Consider using debug mode flags to control verbose logging
+## Architecture
+- **Server**: Main MCP server (task-manager-mcp-server.js) implementing MCP interface
+- **HTTP Wrapper**: HTTP server for Cursor integration (mcp-http-server.js)
+- **Tools**: Task CRUD operations implemented as MCP tools
+- **Resources**: Task collection and individual task resources
+- **IMPORTANT**: Avoid `console.log` in server code - interferes with stdio MCP communication
