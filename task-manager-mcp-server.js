@@ -16,10 +16,10 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 // Base URL for the Task API from environment variables
-const API_BASE_URL = process.env.API_BASE_URL || "https://task-master-pro-mikaelwestoo.replit.app/api";
+const API_BASE_URL = process.env.TASK_MANAGER_API_BASE_URL || "https://task-master-pro-mikaelwestoo.replit.app/api";
 
 // API Key from environment variables
-const API_KEY = process.env.API_KEY;
+const API_KEY = process.env.TASK_MANAGER_API_KEY;
 
 // Schema definitions to make inference easier for AI agents
 const TaskSchema = z.object({
@@ -380,7 +380,7 @@ async function makeApiRequest(method, endpoint, data = null, params = null) {
   
   // Validate that API_KEY is defined
   if (!API_KEY) {
-    throw new Error("API_KEY environment variable is not defined. Please check your .env file.");
+    throw new Error("TASK_MANAGER_API_KEY environment variable is not defined. Please check your .env file.");
   }
   
   const headers = {
