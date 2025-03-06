@@ -383,14 +383,18 @@ async function makeApiRequest(method, endpoint, data = null, params = null) {
     throw new Error("TASK_MANAGER_API_KEY environment variable is not defined. Please check your .env file.");
   }
   
+  console.log(`API Request: ${method} ${url}`);
+  
   const headers = {
     "X-API-Key": API_KEY,
     "Content-Type": "application/json",
+    "Accept": "application/json",
+    "User-Agent": "TaskMcpServer/1.0"
   };
 
   try {
     // Log request details
-    const logEntry = `Timestamp: ${new Date().toISOString()}\nMethod: ${method}\nURL: ${url}\nParams: ${JSON.stringify(params)}\nData: ${JSON.stringify(data)}\n\n`;
+    const logEntry = `Timestamp: ${new Date().toISOString()}\nMethod: ${method}\nURL: ${url}\nParams: ${JSON.stringify(params)}\nData: ${JSON.stringify(data)}\nHeaders: ${JSON.stringify(headers)}\n\n`;
     fs.appendFileSync("api_debug.log", logEntry);
 
     const response = await axios({
@@ -399,10 +403,27 @@ async function makeApiRequest(method, endpoint, data = null, params = null) {
       headers,
       data,
       params,
+      maxRedirects: 5,
+      timeout: 10000,
+      validateStatus: function (status) {
+        return status < 500; // Don't reject if status code is less than 500
+      }
     });
     
-    // No mock data fallback - we're debugging the real API response
+    // Check for HTTP error status codes we didn't automatically reject
+    if (response.status >= 400 && response.status < 500) {
+      console.error(`HTTP error ${response.status} from API: ${JSON.stringify(response.data)}`);
+      
+      // Enhanced error logging
+      const errorLogEntry = `Timestamp: ${new Date().toISOString()}\nError: HTTP ${response.status}\nURL: ${url}\nMethod: ${method}\nResponse: ${JSON.stringify(response.data)}\n\n`;
+      fs.appendFileSync("api_error.log", errorLogEntry);
+      
+      throw new Error(`API Error (${response.status}): ${JSON.stringify(response.data)}`);
+    }
+    
+    // Check if response has expected format
     if (method === "GET" && endpoint === "/tasks") {
+      console.log(`DEBUG listTasks response: ${JSON.stringify(response.data.tasks || [])}`);
       if (!response.data || !response.data.tasks || response.data.tasks.length === 0) {
         console.log("API returned empty tasks array");
       }
@@ -412,8 +433,12 @@ async function makeApiRequest(method, endpoint, data = null, params = null) {
   } catch (error) {
     console.error(`API Error: ${error.message}`);
     
-    // Enhanced error logging
-    const errorLogEntry = `Timestamp: ${new Date().toISOString()}\nError: ${error.message}\nURL: ${url}\nMethod: ${method}\n\n`;
+    // Enhanced error logging with more details
+    const errorDetails = error.response 
+      ? `Status: ${error.response.status}, Data: ${JSON.stringify(error.response.data || 'No response data')}` 
+      : (error.request ? 'No response received' : error.message);
+    
+    const errorLogEntry = `Timestamp: ${new Date().toISOString()}\nError: ${error.message}\nDetails: ${errorDetails}\nURL: ${url}\nMethod: ${method}\n\n`;
     fs.appendFileSync("api_error.log", errorLogEntry);
     
     // No mock data fallback - we're debugging the real API response
@@ -424,8 +449,10 @@ async function makeApiRequest(method, endpoint, data = null, params = null) {
     
     if (error.response) {
       throw new Error(
-        `API Error (${error.response.status}): ${JSON.stringify(error.response.data)}`,
+        `API Error (${error.response.status}): ${JSON.stringify(error.response.data || 'No response data')}`,
       );
+    } else if (error.request) {
+      throw new Error(`API Request Error: No response received (possible network issue)`);
     }
     throw error;
   }
@@ -441,22 +468,34 @@ server.resource(
     try {
       const tasks = await makeApiRequest("GET", "/tasks");
       
+      // Validate the tasks structure
+      if (!tasks || !tasks.tasks || !Array.isArray(tasks.tasks)) {
+        console.error(`Invalid tasks data structure: ${JSON.stringify(tasks)}`);
+        return {
+          contents: [{
+            uri: "tasks://error",
+            text: `Error: Received invalid task data from API`,
+            metadata: { error: "Invalid data structure", data: tasks }
+          }]
+        };
+      }
+      
       // Format tasks for easy display and use
       return {
         contents: tasks.tasks.map((task) => ({
           uri: `tasks://task/${task.id}`,
           text: `ID: ${task.id}
-Task: ${task.task}
-Category: ${task.category}
-Priority: ${task.priority}
-Status: ${task.status}
-Created: ${task.create_time}`,
+Task: ${task.task || 'No description'}
+Category: ${task.category || 'Uncategorized'}
+Priority: ${task.priority || 'medium'}
+Status: ${task.status || 'not_started'}
+Created: ${task.create_time || 'unknown'}`,
           metadata: {
             id: task.id,
-            task: task.task,
+            task: task.task || 'No description',
             category: task.category,
-            priority: task.priority,
-            status: task.status,
+            priority: task.priority || 'medium',
+            status: task.status || 'not_started',
             create_time: task.create_time,
           },
         })),
@@ -539,16 +578,36 @@ server.tool(
       if (status) params.status = status;
       if (priority) params.priority = priority;
 
-      const tasks = await makeApiRequest("GET", "/tasks", null, params);
+      const tasksResponse = await makeApiRequest("GET", "/tasks", null, params);
+      
+      // Validate tasks data structure to avoid errors
+      if (!tasksResponse || !tasksResponse.tasks) {
+        console.error(`Invalid tasks data structure received: ${JSON.stringify(tasksResponse)}`);
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error: Received invalid data from task API`,
+            },
+            {
+              type: "json",
+              json: [] // Return empty array instead of undefined/null
+            }
+          ],
+        };
+      }
+      
+      // Ensure tasks is an array 
+      const tasks = Array.isArray(tasksResponse.tasks) ? tasksResponse.tasks : [];
       
       // Format response in a way that's useful for AI to parse
-      const formattedTasks = tasks.tasks.map(task => ({
+      const formattedTasks = tasks.map(task => ({
         id: task.id,
-        task: task.task, // Changed from title to task to match API schema
+        task: task.task || "No description", // Added fallback for missing task description
         category: task.category,
-        priority: task.priority,
-        status: task.status,
-        create_time: task.create_time // Changed from created to match API schema
+        priority: task.priority || "medium", // Fallback for missing priority
+        status: task.status || "not_started", // Fallback for missing status
+        createTime: task.create_time || task.created_at || task.createTime || new Date().toISOString()
       }));
       
       // Log the formatted response for debugging
@@ -558,11 +617,11 @@ server.tool(
         content: [
           {
             type: "text",
-            text: `Found ${tasks.tasks.length} tasks${status ? ` with status '${status}'` : ''}${priority ? ` and priority '${priority}'` : ''}.`,
+            text: `Found ${tasks.length} tasks${status ? ` with status '${status}'` : ''}${priority ? ` and priority '${priority}'` : ''}.`,
           },
           {
             type: "json",
-            json: tasks.tasks, // Return the actual tasks array directly without reformatting
+            json: formattedTasks, // Return the formatted tasks with consistent structure
           },
         ],
       };
