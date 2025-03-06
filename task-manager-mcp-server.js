@@ -383,74 +383,54 @@ async function makeApiRequest(method, endpoint, data = null, params = null) {
     throw new Error("TASK_MANAGER_API_KEY environment variable is not defined. Please check your .env file.");
   }
   
-  // Detect Windows environment (affects how we make requests)
-  const isWindows = process.platform === 'win32';
-  console.log(`API Request: ${method} ${url} (Platform: ${process.platform})`);
+  console.log(`API Request: ${method} ${url}`);
   
-  // Use different headers and options for Windows vs other platforms
+  // Standard headers
   const headers = {
     "X-API-Key": API_KEY,
-    "Content-Type": "application/json",
-    "Accept": "application/json",
-    "User-Agent": "TaskMcpServer/1.0"
+    "Content-Type": "application/json; charset=utf-8",
+    "Accept": "application/json, text/plain, */*",
+    "User-Agent": "TaskMcpServer/1.0",
+    "Connection": "close",
+    "Cache-Control": "no-cache"
   };
-  
-  // Windows requires different headers to avoid platform-specific issues
-  if (isWindows) {
-    // These headers help with Windows-specific networking quirks
-    headers["Connection"] = "close";  // Don't keep connection alive
-    headers["Cache-Control"] = "no-cache";  // Bypass cache
-    
-    // For all endpoints, use a specific content type that works better on Windows
-    headers["Content-Type"] = "application/json; charset=utf-8";
-    
-    // Add Accept header that works better with Windows
-    headers["Accept"] = "application/json, text/plain, */*";
-  }
 
   try {
     // Log request details
     const logEntry = `Timestamp: ${new Date().toISOString()}\nMethod: ${method}\nURL: ${url}\nParams: ${JSON.stringify(params)}\nData: ${JSON.stringify(data)}\nHeaders: ${JSON.stringify(headers)}\n\n`;
     fs.appendFileSync("api_debug.log", logEntry);
 
-    // Configure axios request options differently for Windows
+    // Configure axios request options
     const requestConfig = {
       method,
       url,
       headers,
       data,
       params,
-      maxRedirects: 5,
-      timeout: 10000,
+      maxRedirects: 0,
+      timeout: 20000,
+      decompress: false,
       validateStatus: function (status) {
         return status < 500; // Don't reject if status code is less than 500
       }
     };
     
-    // Windows-specific axios configuration
-    if (isWindows) {
-      // Adjust timeouts and other settings for Windows
-      requestConfig.timeout = 20000; // Longer timeout for Windows
-      requestConfig.maxRedirects = 0; // Avoid redirects on Windows
-      requestConfig.decompress = false; // Disable automatic decompression on Windows
-      
-      // Ensure proper data encoding for all requests on Windows
-      if (data) {
-        requestConfig.data = JSON.stringify(data);
-      }
-      
-      // Add transform request for properly handling all requests on Windows
-      requestConfig.transformRequest = [(data, headers) => {
-        // Force proper content type
-        headers['Content-Type'] = 'application/json; charset=utf-8';
-        return typeof data === 'string' ? data : JSON.stringify(data);
-      }];
-      
-      // Add specific URL handling for individual task endpoints
-      if (endpoint.startsWith('/tasks/') && method === 'GET') {
-        // Fix to retrieve individual task by adding specific query parameters
-        requestConfig.params = { ...params, id: endpoint.split('/')[2] };
-      }
+    // Ensure proper data encoding for all requests
+    if (data) {
+      requestConfig.data = JSON.stringify(data);
+    }
+    
+    // Add transform request for properly handling all requests
+    requestConfig.transformRequest = [(data, headers) => {
+      // Force proper content type
+      headers['Content-Type'] = 'application/json; charset=utf-8';
+      return typeof data === 'string' ? data : JSON.stringify(data);
+    }];
+    
+    // Add specific URL handling for individual task endpoints
+    if (endpoint.startsWith('/tasks/') && method === 'GET') {
+      // Fix to retrieve individual task by adding specific query parameters
+      requestConfig.params = { ...params, id: endpoint.split('/')[2] };
     }
     
     const response = await axios(requestConfig);
@@ -485,12 +465,6 @@ async function makeApiRequest(method, endpoint, data = null, params = null) {
     
     const errorLogEntry = `Timestamp: ${new Date().toISOString()}\nError: ${error.message}\nDetails: ${errorDetails}\nURL: ${url}\nMethod: ${method}\n\n`;
     fs.appendFileSync("api_error.log", errorLogEntry);
-    
-    // No mock data fallback - we're debugging the real API response
-    if (method === "GET" && endpoint === "/tasks") {
-      console.log("API error when getting tasks");
-      // Let the error propagate instead of returning mock data
-    }
     
     if (error.response) {
       throw new Error(
@@ -566,29 +540,18 @@ server.resource(
   }),
   async (uri, params) => {
     try {
-      // Get all tasks and find the one we want
-      // Windows requires a different approach for fetching individual tasks
-      const isWindows = process.platform === 'win32';
-      
+      // Try direct task endpoint first
       let task;
-      if (isWindows) {
-        // On Windows, we need a workaround to get a specific task
-        // First try direct task endpoint
-        try {
-          const taskResult = await makeApiRequest("GET", `/tasks/${params.taskId}`);
-          if (taskResult && (taskResult.id || taskResult.task)) {
-            task = taskResult;
-          }
-        } catch (directError) {
-          console.log(`Direct task fetch failed, using task list fallback: ${directError.message}`);
-          // Fallback to getting all tasks and filtering
-          const tasks = await makeApiRequest("GET", "/tasks");
-          task = tasks.tasks.find((t) => t.id === Number(params.taskId) || t.id === params.taskId);
+      try {
+        const taskResult = await makeApiRequest("GET", `/tasks/${params.taskId}`);
+        if (taskResult && (taskResult.id || taskResult.task)) {
+          task = taskResult;
         }
-      } else {
-        // Non-Windows approach
+      } catch (directError) {
+        console.log(`Direct task fetch failed, using task list fallback: ${directError.message}`);
+        // Fallback to getting all tasks and filtering
         const tasks = await makeApiRequest("GET", "/tasks");
-        task = tasks.tasks.find((t) => t.id === Number(params.taskId));
+        task = tasks.tasks.find((t) => t.id === Number(params.taskId) || t.id === params.taskId);
       }
       
       if (!task) {

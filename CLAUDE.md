@@ -29,16 +29,16 @@
 - **Imports**: ES module syntax (`import x from 'y'`)
 - **Formatting**: 2-space indentation, trailing commas in multi-line objects/arrays
 - **Naming**: camelCase for variables/functions, PascalCase for classes
-- **Error handling**: Use try/catch with specific error messages and platform-aware logging
+- **Error handling**: Use try/catch with specific error messages
 - **Validation**: Use Zod for schema validation and data parsing
 - **Async**: Prefer async/await over Promise chains
 - **Documentation**: JSDoc comments for public functions and parameters
-- **HTTP client**: Axios with platform-specific configurations for Windows compatibility
+- **HTTP client**: Axios with consistent configuration
 - **MCP protocol**: Follow MCP 1.6.1 specifications for all endpoints
 
-## Cross-Platform Compatibility
-- **Windows headers**: Use `Connection: close`, `Cache-Control: no-cache`, explicit charset
-- **Request config**: Longer timeouts (20000ms) on Windows, custom JSON encoding
-- **Response handling**: Flexible data extraction for different platform responses
-- **Testing**: Run tests on both Windows and WSL/Linux environments
-- **Logging**: Enhanced platform-specific troubleshooting in log files
+## API Configuration
+- **Headers**: Standard headers include `Connection: close`, `Cache-Control: no-cache`, explicit charset
+- **Request config**: Longer timeouts (20000ms), custom JSON encoding
+- **Response handling**: Flexible data extraction for consistent responses
+- **Testing**: Run tests in any environment
+- **Logging**: Enhanced troubleshooting with detailed log files
