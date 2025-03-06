@@ -383,21 +383,37 @@ async function makeApiRequest(method, endpoint, data = null, params = null) {
     throw new Error("TASK_MANAGER_API_KEY environment variable is not defined. Please check your .env file.");
   }
   
-  console.log(`API Request: ${method} ${url}`);
+  // Detect Windows environment (affects how we make requests)
+  const isWindows = process.platform === 'win32';
+  console.log(`API Request: ${method} ${url} (Platform: ${process.platform})`);
   
+  // Use different headers and options for Windows vs other platforms
   const headers = {
     "X-API-Key": API_KEY,
     "Content-Type": "application/json",
     "Accept": "application/json",
     "User-Agent": "TaskMcpServer/1.0"
   };
+  
+  // Windows requires different headers to avoid platform-specific issues
+  if (isWindows) {
+    // These headers help with Windows-specific networking quirks
+    headers["Connection"] = "close";  // Don't keep connection alive
+    headers["Cache-Control"] = "no-cache";  // Bypass cache
+    
+    // For tasks endpoint, use a specific content type that works better on Windows
+    if (endpoint === "/tasks") {
+      headers["Content-Type"] = "application/json; charset=utf-8";
+    }
+  }
 
   try {
     // Log request details
     const logEntry = `Timestamp: ${new Date().toISOString()}\nMethod: ${method}\nURL: ${url}\nParams: ${JSON.stringify(params)}\nData: ${JSON.stringify(data)}\nHeaders: ${JSON.stringify(headers)}\n\n`;
     fs.appendFileSync("api_debug.log", logEntry);
 
-    const response = await axios({
+    // Configure axios request options differently for Windows
+    const requestConfig = {
       method,
       url,
       headers,
@@ -408,7 +424,27 @@ async function makeApiRequest(method, endpoint, data = null, params = null) {
       validateStatus: function (status) {
         return status < 500; // Don't reject if status code is less than 500
       }
-    });
+    };
+    
+    // Windows-specific axios configuration
+    if (isWindows) {
+      // Adjust timeouts and other settings for Windows
+      requestConfig.timeout = 20000; // Longer timeout for Windows
+      requestConfig.maxRedirects = 0; // Avoid redirects on Windows
+      requestConfig.decompress = false; // Disable automatic decompression on Windows
+      
+      // Force application/json for DATA encoding
+      if (data) {
+        requestConfig.data = JSON.stringify(data);
+        requestConfig.transformRequest = [(data, headers) => {
+          // Force the proper content type and return serialized data
+          headers['Content-Type'] = 'application/json; charset=utf-8';
+          return data; // data already stringified above
+        }];
+      }
+    }
+    
+    const response = await axios(requestConfig);
     
     // Check for HTTP error status codes we didn't automatically reject
     if (response.status >= 400 && response.status < 500) {
@@ -580,25 +616,40 @@ server.tool(
 
       const tasksResponse = await makeApiRequest("GET", "/tasks", null, params);
       
-      // Validate tasks data structure to avoid errors
-      if (!tasksResponse || !tasksResponse.tasks) {
-        console.error(`Invalid tasks data structure received: ${JSON.stringify(tasksResponse)}`);
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Error: Received invalid data from task API`,
-            },
-            {
-              type: "json",
-              json: [] // Return empty array instead of undefined/null
-            }
-          ],
-        };
+      // More flexible validation for tasks data structure
+      let tasks = [];
+      
+      // Handle various response formats that might come from the API
+      if (tasksResponse) {
+        if (Array.isArray(tasksResponse.tasks)) {
+          // Standard format: { tasks: [...] }
+          tasks = tasksResponse.tasks;
+          console.log("Found tasks array in standard format");
+        } else if (Array.isArray(tasksResponse)) {
+          // Direct array format: [...]
+          tasks = tasksResponse;
+          console.log("Found tasks in direct array format");
+        } else if (typeof tasksResponse === 'object' && tasksResponse !== null) {
+          // Try to extract tasks from any available property
+          const possibleTasksProperties = Object.entries(tasksResponse)
+            .filter(([_, value]) => Array.isArray(value))
+            .map(([key, value]) => ({ key, value }));
+            
+          if (possibleTasksProperties.length > 0) {
+            // Use the first array property as tasks
+            const tasksProp = possibleTasksProperties[0];
+            tasks = tasksProp.value;
+            console.log(`Found tasks array in property: ${tasksProp.key}`);
+          } else {
+            console.error(`No tasks array found in response: ${JSON.stringify(tasksResponse)}`);
+          }
+        }
       }
       
-      // Ensure tasks is an array 
-      const tasks = Array.isArray(tasksResponse.tasks) ? tasksResponse.tasks : [];
+      // If we still couldn't find tasks, log error and return empty array
+      if (tasks.length === 0) {
+        console.error(`Invalid or empty tasks data structure: ${JSON.stringify(tasksResponse)}`);
+      }
       
       // Format response in a way that's useful for AI to parse
       const formattedTasks = tasks.map(task => ({
