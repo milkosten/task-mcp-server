@@ -401,23 +401,10 @@ async function makeApiRequest(method, endpoint, data = null, params = null) {
       params,
     });
     
-    // Add fake test data if we get an error or empty response
-    // This allows testing to continue even if the remote API is having issues
+    // No mock data fallback - we're debugging the real API response
     if (method === "GET" && endpoint === "/tasks") {
       if (!response.data || !response.data.tasks || response.data.tasks.length === 0) {
-        console.log("API returned empty tasks array, adding mock data for testing");
-        return {
-          tasks: [
-            {
-              id: 1,
-              task: "Mock task for testing",
-              category: "Testing",
-              priority: "medium",
-              status: "not_started",
-              create_time: new Date().toISOString()
-            }
-          ]
-        };
+        console.log("API returned empty tasks array");
       }
     }
     
@@ -429,34 +416,10 @@ async function makeApiRequest(method, endpoint, data = null, params = null) {
     const errorLogEntry = `Timestamp: ${new Date().toISOString()}\nError: ${error.message}\nURL: ${url}\nMethod: ${method}\n\n`;
     fs.appendFileSync("api_error.log", errorLogEntry);
     
-    // If this is a GET request for tasks, provide mock data to allow tests to continue
+    // No mock data fallback - we're debugging the real API response
     if (method === "GET" && endpoint === "/tasks") {
-      console.log("API error when getting tasks, returning mock data for testing");
-      
-      // Maintain a list of known task IDs (created during this test run)
-      if (!global.createdTaskIds) {
-        global.createdTaskIds = new Set();
-      }
-      
-      // Create base mock task
-      const mockTasks = [
-        {
-          id: 1,
-          task: "Mock task for testing (API Error fallback)",
-          category: "Testing",
-          priority: "medium",
-          status: "not_started",
-          create_time: new Date().toISOString()
-        }
-      ];
-      
-      // Add any recently created tasks to the mock data
-      if (global.recentlyCreatedTasks && global.recentlyCreatedTasks.length > 0) {
-        console.log(`Adding ${global.recentlyCreatedTasks.length} recently created tasks to mock data`);
-        mockTasks.push(...global.recentlyCreatedTasks);
-      }
-      
-      return { tasks: mockTasks };
+      console.log("API error when getting tasks");
+      // Let the error propagate instead of returning mock data
     }
     
     if (error.response) {
@@ -649,19 +612,8 @@ server.tool(
 
       const newTask = await makeApiRequest("POST", "/tasks", requestBody);
       
-      // Store created task for reference in mock data
-      if (!global.recentlyCreatedTasks) {
-        global.recentlyCreatedTasks = [];
-      }
-      global.recentlyCreatedTasks.push({
-        id: newTask.id,
-        task: newTask.task || task,
-        category: newTask.category || category,
-        priority: newTask.priority || priority || "medium",
-        status: newTask.status || status || "not_started",
-        create_time: newTask.create_time || new Date().toISOString()
-      });
-      console.log(`Stored newly created task ID ${newTask.id} for reference`);
+      // No longer storing tasks for mock data fallback
+      console.log(`Created new task with ID ${newTask.id}`);
 
       return {
         content: [
@@ -685,35 +637,13 @@ server.tool(
     } catch (error) {
       console.log(`Error in createTask: ${error.message}`);
       
-      // Create a mock response for testing
-      const mockTaskId = Math.floor(Math.random() * 1000) + 100;
-      
-      // Store created mock task for reference
-      if (!global.recentlyCreatedTasks) {
-        global.recentlyCreatedTasks = [];
-      }
-      const mockTask = {
-        id: mockTaskId,
-        task: task,
-        category: category,
-        priority: priority || "medium",
-        status: status || "not_started",
-        create_time: new Date().toISOString()
-      };
-      
-      global.recentlyCreatedTasks.push(mockTask);
-      console.log(`API error in createTask. Created mock task with ID ${mockTaskId} for testing`);
-      
+      // No mock response - let the error propagate
       return {
         content: [
           {
             type: "text",
-            text: `Task created successfully with ID: ${mockTaskId} (mock data due to API error)`,
-          },
-          {
-            type: "json",
-            json: mockTask,
-          },
+            text: `Error creating task: ${error.message}`,
+          }
         ],
       };
     }
@@ -850,11 +780,8 @@ server.tool(
     try {
       const response = await makeApiRequest("DELETE", `/tasks/${taskId}`);
       
-      // Remove from our global list for consistent mock data
-      if (global.recentlyCreatedTasks) {
-        global.recentlyCreatedTasks = global.recentlyCreatedTasks.filter(task => task.id !== taskId);
-        console.log(`Removed task ID ${taskId} from tracked tasks`);
-      }
+      // No longer tracking tasks for mock data
+      console.log(`Deleted task ID ${taskId}`);
 
       return {
         content: [
@@ -867,17 +794,12 @@ server.tool(
     } catch (error) {
       console.log(`Error in deleteTask: ${error.message}`);
       
-      // Remove from our global list for consistent mock data even when API fails
-      if (global.recentlyCreatedTasks) {
-        global.recentlyCreatedTasks = global.recentlyCreatedTasks.filter(task => task.id !== taskId);
-        console.log(`API error in deleteTask. Removed task ID ${taskId} from tracked tasks anyway`);
-      }
-      
+      // No mock response - let the error propagate
       return {
         content: [
           {
             type: "text",
-            text: `Task ${taskId} deleted successfully (mock success due to API error).`,
+            text: `Error deleting task: ${error.message}`,
           },
         ],
       };

@@ -322,7 +322,7 @@ Test run started at: ${new Date().toISOString()}
       // Discover capabilities
       await this.runDiscoveryTest();
       
-      // Test resources
+      // Test resources (creates test data internally)
       await this.runResourceTests();
       
       // Test tools
@@ -391,6 +391,39 @@ Test run started at: ${new Date().toISOString()}
     console.log('\n📦 RUNNING TEST: Resources - Testing resource endpoints using SDK');
     
     try {
+      // Create a test task first to ensure we have data for testing
+      console.log('  - Creating a test task for resource testing');
+      const createResponse = await this.sendRequest({
+        type: 'invoke',
+        tool: 'createTask',
+        parameters: {
+          task: 'Resource test task',
+          category: 'ResourceTesting',
+          priority: 'medium',
+          status: 'not_started'
+        },
+        id: uuidv4()
+      });
+      
+      // Extract created task ID from response
+      console.log('  - Extracting created task ID from response');
+      let testTaskId = null;
+      
+      if (createResponse.content && Array.isArray(createResponse.content)) {
+        const jsonContent = createResponse.content.find(c => c.type === 'json');
+        if (jsonContent && jsonContent.json && jsonContent.json.id) {
+          testTaskId = jsonContent.json.id;
+        }
+      } else if (createResponse.result && createResponse.result.id) {
+        testTaskId = createResponse.result.id;
+      } else if (createResponse.task && createResponse.task.id) {
+        testTaskId = createResponse.task.id;
+      } else if (createResponse.id) {
+        testTaskId = createResponse.id;
+      }
+      
+      console.log(`  - Created test task with ID: ${testTaskId}`);
+      
       // Test tasks list resource
       console.log('  - Testing tasks list resource (tasks://list)');
       console.log('  - Sending resource request for tasks list using SDK');
@@ -427,70 +460,63 @@ Test run started at: ${new Date().toISOString()}
       }
       
       console.log(`  - Tasks found: ${tasksList.length}`);
+      assert(tasksList.length > 0, 'Tasks list should contain the task we just created');
       await this.logTestResult('TasksResource', true, 
         `Successfully retrieved tasks list with ${tasksList.length} tasks`, 
         tasksResponse);
       
-      // If we have tasks, test individual task resource
-      if (tasksList.length > 0) {
-        // Extract the task ID based on the format we received
-        let firstTask = tasksList[0];
-        let taskId;
-        
-        if (firstTask.metadata && firstTask.metadata.id) {
-          taskId = firstTask.metadata.id;
-        } else if (firstTask.id) {
-          taskId = firstTask.id;
-        } else {
-          console.log('  - Task object structure:', JSON.stringify(firstTask));
-          assert(false, 'Could not extract task ID from response');
-        }
-        
-        console.log(`  - Testing individual task resource (tasks://task/${taskId})`);
-        console.log(`  - Sending resource request for task ID: ${taskId} using SDK`);
-        
-        const taskResponse = await this.sendRequest({
-          type: 'resource',
-          uri: `tasks://task/${taskId}`,
-          id: uuidv4()
-        });
-        
-        // Verify individual task response structure (SDK format)
-        console.log('  - Verifying individual task response structure');
-        
-        // The SDK might normalize the response format
-        // Check for task data in various possible formats
-        let taskData = null;
-        
-        if (taskResponse.contents && taskResponse.contents.length === 1) {
-          console.log('  - Found task in contents array format');
-          taskData = taskResponse.contents[0];
-        } else if (taskResponse.content && taskResponse.content.length === 1) {
-          console.log('  - Found task in content array format');
-          taskData = taskResponse.content[0];
-        } else if (taskResponse.task) {
-          console.log('  - Found task in direct task object format');
-          taskData = taskResponse.task;
-        } else {
-          // Log the actual response for debugging
-          console.log('  - Actual response structure:', JSON.stringify(taskResponse).substring(0, 100) + '...');
-          assert(false, 'Individual task resource must return task data in some format');
-        }
-        
-        // Verify task ID matches requested ID
-        console.log('  - Verifying task ID matches requested ID');
-        const returnedTaskId = taskData.metadata?.id || taskData.id;
-        assert(returnedTaskId === taskId, 'Task resource must return the requested task ID');
-        
-        await this.logTestResult('TaskResource', true, 
-          `Successfully retrieved individual task with ID ${taskId}`, 
-          taskResponse);
+      // Test individual task resource using the task we just created
+      console.log(`  - Testing individual task resource (tasks://task/${testTaskId})`);
+      console.log(`  - Sending resource request for task ID: ${testTaskId} using SDK`);
+      
+      const taskResponse = await this.sendRequest({
+        type: 'resource',
+        uri: `tasks://task/${testTaskId}`,
+        id: uuidv4()
+      });
+      
+      // Verify individual task response structure (SDK format)
+      console.log('  - Verifying individual task response structure');
+      
+      // The SDK might normalize the response format
+      // Check for task data in various possible formats
+      let taskData = null;
+      
+      if (taskResponse.contents && taskResponse.contents.length === 1) {
+        console.log('  - Found task in contents array format');
+        taskData = taskResponse.contents[0];
+      } else if (taskResponse.content && taskResponse.content.length === 1) {
+        console.log('  - Found task in content array format');
+        taskData = taskResponse.content[0];
+      } else if (taskResponse.task) {
+        console.log('  - Found task in direct task object format');
+        taskData = taskResponse.task;
       } else {
-        console.log('  - Skipping individual task test (no tasks available)');
-        await this.logTestResult('TaskResource', true, 
-          'Skipped individual task test (no tasks available)', null);
-        testsSkipped++;
+        // Log the actual response for debugging
+        console.log('  - Actual response structure:', JSON.stringify(taskResponse).substring(0, 100) + '...');
+        assert(false, 'Individual task resource must return task data in some format');
       }
+      
+      // Verify task ID matches requested ID
+      console.log('  - Verifying task ID matches requested ID');
+      const returnedTaskId = taskData.metadata?.id || taskData.id;
+      assert(returnedTaskId == testTaskId, 'Task resource must return the requested task ID');
+      
+      await this.logTestResult('TaskResource', true, 
+        `Successfully retrieved individual task with ID ${testTaskId}`, 
+        taskResponse);
+        
+      // Clean up by deleting the test task
+      console.log('  - Cleaning up: Deleting test task');
+      await this.sendRequest({
+        type: 'invoke',
+        tool: 'deleteTask',
+        parameters: {
+          taskId: testTaskId
+        },
+        id: uuidv4()
+      });
+      console.log(`  - Deleted test task with ID: ${testTaskId}`);
     } catch (error) {
       console.log(`  - ERROR: ${error.message}`);
       await this.logTestResult('ResourceTests', false, `Resource tests failed: ${error.message}`, error);
