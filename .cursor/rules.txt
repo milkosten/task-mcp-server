@@ -1,0 +1,2 @@
+Always use the official @modelcontextprotocol/sdk/ for the MCP - Server, never try to build any mock-up of it.
+Never build any mock-data , we want always use the external API

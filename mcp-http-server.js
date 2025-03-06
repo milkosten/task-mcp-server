@@ -3,13 +3,14 @@
  * HTTP wrapper for MCP Task API Server
  * 
  * This server creates an HTTP endpoint that Cursor IDE can connect to
- * while using the existing MCP server implementation
+ * while using the MCP SDK server implementation
  */
 
 import http from 'http';
 import { spawn } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
 
 // Get directory name for the current module
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -19,6 +20,15 @@ const MCP_SERVER_PATH = path.join(__dirname, 'task-manager-mcp-server.js');
 
 // Configure the server
 const PORT = process.env.MCP_HTTP_PORT || 3510;
+
+// Setup logging to file to avoid console pollution
+const logDebug = (message) => {
+  fs.appendFileSync("http_debug.log", `${new Date().toISOString()} - ${message}\n`);
+};
+
+const logError = (message) => {
+  fs.appendFileSync("http_error.log", `${new Date().toISOString()} - ${message}\n`);
+};
 
 // Create HTTP server
 const server = http.createServer(async (req, res) => {
@@ -39,7 +49,7 @@ const server = http.createServer(async (req, res) => {
       try {
         // Parse the JSON body
         const requestData = JSON.parse(body);
-        console.log('Received request:', JSON.stringify(requestData));
+        logDebug(`Received request: ${JSON.stringify(requestData)}`);
         
         // Spawn the MCP server process
         const mcpProcess = spawn('node', [MCP_SERVER_PATH]);
@@ -55,7 +65,7 @@ const server = http.createServer(async (req, res) => {
         
         // Handle errors
         mcpProcess.stderr.on('data', (data) => {
-          console.error(`MCP server error: ${data}`);
+          logError(`MCP server error: ${data}`);
         });
         
         // When MCP server is done, send response
@@ -64,11 +74,12 @@ const server = http.createServer(async (req, res) => {
             try {
               // Parse and send the response
               const jsonResponse = JSON.parse(responseData.trim());
+              logDebug(`Sending response: ${JSON.stringify(jsonResponse)}`);
               res.setHeader('Content-Type', 'application/json');
               res.statusCode = 200;
               res.end(JSON.stringify(jsonResponse));
             } catch (error) {
-              console.error('Error parsing MCP server response:', error);
+              logError(`Error parsing MCP server response: ${error}`);
               res.statusCode = 500;
               res.end(JSON.stringify({
                 error: 'Failed to parse MCP server response',
@@ -77,6 +88,7 @@ const server = http.createServer(async (req, res) => {
             }
           } else {
             // Handle non-zero exit code
+            logError(`MCP server exited with code ${code}`);
             res.statusCode = 500;
             res.end(JSON.stringify({
               error: `MCP server exited with code ${code}`,
@@ -86,7 +98,7 @@ const server = http.createServer(async (req, res) => {
         });
       } catch (error) {
         // Handle JSON parsing error
-        console.error('Error parsing request:', error);
+        logError(`Error parsing request: ${error}`);
         res.statusCode = 400;
         res.end(JSON.stringify({
           error: 'Invalid JSON in request body',
@@ -115,6 +127,7 @@ const server = http.createServer(async (req, res) => {
 
 // Start the server
 server.listen(PORT, () => {
+  // It's okay to use console.log here since this is not the MCP stdio server
   console.log(`MCP HTTP Server running at http://localhost:${PORT}`);
   console.log(`POST endpoint available at http://localhost:${PORT}/mcp`);
   console.log(`MCP Server path: ${MCP_SERVER_PATH}`);
