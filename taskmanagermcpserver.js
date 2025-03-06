@@ -96,7 +96,8 @@ const server = {
           };
       }
     } catch (error) {
-      console.error(`Error handling request: ${error.message}`);
+      // Log to file instead of console
+      fs.appendFileSync("api_error.log", `Error handling request: ${error.message}\n`);
       return {
         id,
         error: error.message
@@ -305,23 +306,24 @@ function ResourceTemplate(pattern, options = {}) {
 
 // Helper to match URI against a template
 function matchUri(uri, pattern) {
-  console.log(`Matching URI: ${uri.href} against pattern: ${pattern}`);
+  // Write to log file instead of console
+  fs.appendFileSync("api_debug.log", `Matching URI: ${uri.href} against pattern: ${pattern}\n`);
   
   const patternParts = pattern.split('/');
   const uriParts = uri.pathname.split('/');
   
   // Handle tasks:// protocol special case
   if (pattern.startsWith('tasks://') && uri.protocol === 'tasks:') {
-    console.log('Special case for tasks:// protocol');
+    fs.appendFileSync("api_debug.log", 'Special case for tasks:// protocol\n');
     const taskPattern = pattern.substring('tasks://'.length);
     const taskUri = uri.pathname.substring(2); // Skip the // in pathname
     
-    console.log(`Comparing: '${taskPattern}' with '${taskUri}'`);
+    fs.appendFileSync("api_debug.log", `Comparing: '${taskPattern}' with '${taskUri}'\n`);
     
     // Direct compare for simple cases
     if (taskPattern === taskUri || 
        (taskPattern === 'list' && taskUri === 'list')) {
-      console.log('Direct match found!');
+      fs.appendFileSync("api_debug.log", 'Direct match found!\n');
       return {}; // Empty params for direct match
     }
     
@@ -334,18 +336,18 @@ function matchUri(uri, pattern) {
         const paramValue = taskUri.substring(taskPattern.substring(0, paramStart).length);
         const params = {};
         params[paramName] = paramValue;
-        console.log(`Parameterized match found! Params: ${JSON.stringify(params)}`);
+        fs.appendFileSync("api_debug.log", `Parameterized match found! Params: ${JSON.stringify(params)}\n`);
         return params;
       }
     }
   }
   
   // Original implementation
-  console.log(`Standard matching: pattern parts ${JSON.stringify(patternParts)}, URI parts ${JSON.stringify(uriParts)}`);
+  fs.appendFileSync("api_debug.log", `Standard matching: pattern parts ${JSON.stringify(patternParts)}, URI parts ${JSON.stringify(uriParts)}\n`);
   
   // Check protocol match
   if (!uri.href.startsWith(pattern.split('/')[0])) {
-    console.log('Protocol mismatch');
+    fs.appendFileSync("api_debug.log", 'Protocol mismatch\n');
     return null;
   }
   
@@ -356,21 +358,21 @@ function matchUri(uri, pattern) {
     const template = patternParts[i];
     const part = uriParts[i];
     
-    console.log(`Comparing part ${i}: '${template}' with '${part}'`);
+    fs.appendFileSync("api_debug.log", `Comparing part ${i}: '${template}' with '${part}'\n`);
     
     if (template.startsWith('{') && template.endsWith('}')) {
       // Parameter part
       const paramName = template.substring(1, template.length - 1);
       params[paramName] = part;
-      console.log(`Param match: ${paramName}=${part}`);
+      fs.appendFileSync("api_debug.log", `Param match: ${paramName}=${part}\n`);
     } else if (template !== part) {
       // Static part doesn't match
-      console.log(`Mismatch at part ${i}: '${template}' !== '${part}'`);
+      fs.appendFileSync("api_debug.log", `Mismatch at part ${i}: '${template}' !== '${part}'\n`);
       return null;
     }
   }
   
-  console.log('Match successful!');
+  fs.appendFileSync("api_debug.log", 'Match successful!\n');
   return params;
 }
 
@@ -383,7 +385,8 @@ async function makeApiRequest(method, endpoint, data = null, params = null) {
     throw new Error("TASK_MANAGER_API_KEY environment variable is not defined. Please check your .env file.");
   }
   
-  console.log(`API Request: ${method} ${url}`);
+  // Log to file instead of console
+  fs.appendFileSync("api_debug.log", `API Request: ${method} ${url}\n`);
   
   // Standard headers
   const headers = {
@@ -437,7 +440,8 @@ async function makeApiRequest(method, endpoint, data = null, params = null) {
     
     // Check for HTTP error status codes we didn't automatically reject
     if (response.status >= 400 && response.status < 500) {
-      console.error(`HTTP error ${response.status} from API: ${JSON.stringify(response.data)}`);
+      // Log to file instead of console
+      fs.appendFileSync("api_error.log", `HTTP error ${response.status} from API: ${JSON.stringify(response.data)}\n`);
       
       // Enhanced error logging
       const errorLogEntry = `Timestamp: ${new Date().toISOString()}\nError: HTTP ${response.status}\nURL: ${url}\nMethod: ${method}\nResponse: ${JSON.stringify(response.data)}\n\n`;
@@ -448,15 +452,17 @@ async function makeApiRequest(method, endpoint, data = null, params = null) {
     
     // Check if response has expected format
     if (method === "GET" && endpoint === "/tasks") {
-      console.log(`DEBUG listTasks response: ${JSON.stringify(response.data.tasks || [])}`);
+      // Log to file instead of console
+      fs.appendFileSync("api_debug.log", `DEBUG listTasks response: ${JSON.stringify(response.data.tasks || [])}\n`);
       if (!response.data || !response.data.tasks || response.data.tasks.length === 0) {
-        console.log("API returned empty tasks array");
+        fs.appendFileSync("api_debug.log", "API returned empty tasks array\n");
       }
     }
     
     return response.data;
   } catch (error) {
-    console.error(`API Error: ${error.message}`);
+    // Log to file instead of console
+    fs.appendFileSync("api_error.log", `API Error: ${error.message}\n`);
     
     // Enhanced error logging with more details
     const errorDetails = error.response 
@@ -489,7 +495,7 @@ server.resource(
       
       // Validate the tasks structure
       if (!tasks || !tasks.tasks || !Array.isArray(tasks.tasks)) {
-        console.error(`Invalid tasks data structure: ${JSON.stringify(tasks)}`);
+        fs.appendFileSync("api_error.log", `Invalid tasks data structure: ${JSON.stringify(tasks)}\n`);
         return {
           contents: [{
             uri: "tasks://error",
@@ -520,7 +526,7 @@ Created: ${task.create_time || 'unknown'}`,
         })),
       };
     } catch (error) {
-      console.error(`Error fetching tasks: ${error.message}`);
+      fs.appendFileSync("api_error.log", `Error fetching tasks: ${error.message}\n`);
       return {
         contents: [{
           uri: "tasks://error",
@@ -548,7 +554,7 @@ server.resource(
           task = taskResult;
         }
       } catch (directError) {
-        console.log(`Direct task fetch failed, using task list fallback: ${directError.message}`);
+        fs.appendFileSync("api_debug.log", `Direct task fetch failed, using task list fallback: ${directError.message}\n`);
         // Fallback to getting all tasks and filtering
         const tasks = await makeApiRequest("GET", "/tasks");
         task = tasks.tasks.find((t) => t.id === Number(params.taskId) || t.id === params.taskId);
@@ -616,11 +622,11 @@ server.tool(
         if (Array.isArray(tasksResponse.tasks)) {
           // Standard format: { tasks: [...] }
           tasks = tasksResponse.tasks;
-          console.log("Found tasks array in standard format");
+          fs.appendFileSync("api_debug.log", "Found tasks array in standard format\n");
         } else if (Array.isArray(tasksResponse)) {
           // Direct array format: [...]
           tasks = tasksResponse;
-          console.log("Found tasks in direct array format");
+          fs.appendFileSync("api_debug.log", "Found tasks in direct array format\n");
         } else if (typeof tasksResponse === 'object' && tasksResponse !== null) {
           // Try to extract tasks from any available property
           const possibleTasksProperties = Object.entries(tasksResponse)
@@ -631,16 +637,16 @@ server.tool(
             // Use the first array property as tasks
             const tasksProp = possibleTasksProperties[0];
             tasks = tasksProp.value;
-            console.log(`Found tasks array in property: ${tasksProp.key}`);
+            fs.appendFileSync("api_debug.log", `Found tasks array in property: ${tasksProp.key}\n`);
           } else {
-            console.error(`No tasks array found in response: ${JSON.stringify(tasksResponse)}`);
+            fs.appendFileSync("api_error.log", `No tasks array found in response: ${JSON.stringify(tasksResponse)}\n`);
           }
         }
       }
       
       // If we still couldn't find tasks, log error and return empty array
       if (tasks.length === 0) {
-        console.error(`Invalid or empty tasks data structure: ${JSON.stringify(tasksResponse)}`);
+        fs.appendFileSync("api_error.log", `Invalid or empty tasks data structure: ${JSON.stringify(tasksResponse)}\n`);
       }
       
       // Format response in a way that's useful for AI to parse
@@ -653,8 +659,8 @@ server.tool(
         createTime: task.create_time || task.created_at || task.createTime || new Date().toISOString()
       }));
       
-      // Log the formatted response for debugging
-      console.log(`DEBUG listTasks response: ${JSON.stringify(formattedTasks)}`);
+      // Log the formatted response for debugging (to file, not console)
+      fs.appendFileSync("api_debug.log", `DEBUG listTasks response: ${JSON.stringify(formattedTasks)}\n`);
 
       return {
         content: [
@@ -714,8 +720,8 @@ server.tool(
 
       const newTask = await makeApiRequest("POST", "/tasks", requestBody);
       
-      // No longer storing tasks for mock data fallback
-      console.log(`Created new task with ID ${newTask.id}`);
+      // Log to file, not console
+      fs.appendFileSync("api_debug.log", `Created new task with ID ${newTask.id}\n`);
 
       return {
         content: [
@@ -737,7 +743,7 @@ server.tool(
         ],
       };
     } catch (error) {
-      console.log(`Error in createTask: ${error.message}`);
+      fs.appendFileSync("api_error.log", `Error in createTask: ${error.message}\n`);
       
       // No mock response - let the error propagate
       return {
@@ -882,8 +888,8 @@ server.tool(
     try {
       const response = await makeApiRequest("DELETE", `/tasks/${taskId}`);
       
-      // No longer tracking tasks for mock data
-      console.log(`Deleted task ID ${taskId}`);
+      // Log to file, not console
+      fs.appendFileSync("api_debug.log", `Deleted task ID ${taskId}\n`);
 
       return {
         content: [
@@ -894,7 +900,7 @@ server.tool(
         ],
       };
     } catch (error) {
-      console.log(`Error in deleteTask: ${error.message}`);
+      fs.appendFileSync("api_error.log", `Error in deleteTask: ${error.message}\n`);
       
       // No mock response - let the error propagate
       return {
@@ -1055,14 +1061,17 @@ rl.on('line', async (line) => {
     const request = JSON.parse(line);
     const response = await server.handleRequest(request);
     
-    // Send response back to stdout
-    console.log(JSON.stringify(response));
+    // Send response back to stdout - this is ok since it's the MCP protocol response
+    process.stdout.write(JSON.stringify(response) + '\n');
   } catch (error) {
-    console.error('Error processing request:', error);
-    console.log(JSON.stringify({
+    // Log to file, not console
+    fs.appendFileSync("api_error.log", `Error processing request: ${error}\n`);
+    
+    // Send error response back to stdout - this is ok since it's the MCP protocol response
+    process.stdout.write(JSON.stringify({
       id: 'error_' + Date.now(),
       error: `Failed to process request: ${error.message}`
-    }));
+    }) + '\n');
   }
 });
 
@@ -1077,4 +1086,4 @@ function getSchemaType(schema) {
   return "unknown";
 }
 
-console.log("Task Manager MCP Server started. Ready to process messages.");
+fs.appendFileSync("api_debug.log", "Task Manager MCP Server started. Ready to process messages.\n");

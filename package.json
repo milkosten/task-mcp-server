@@ -6,6 +6,7 @@
   "main": "task-manager-mcp-server.js",
   "scripts": {
     "start": "node task-manager-mcp-server.js",
+    "http": "node mcp-http-server.js",
     "test": "node mcp-client-test.js"
   },
   "dependencies": {
