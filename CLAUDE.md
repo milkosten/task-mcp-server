@@ -12,7 +12,6 @@
 ## Environment Setup
 - Configure with `.env` file (copy from `.env.example`)
 - Required variables: `TASK_MANAGER_API_KEY`, `TASK_MANAGER_API_BASE_URL`
-- Optional variables: `PORT` (default: 3100), `NODE_ENV`
 - Developer setup: Run `npm install` to install required dependencies
 
 ## Code Style
