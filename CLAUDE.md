@@ -37,3 +37,25 @@ This repo implements a Model Context Protocol (MCP) server for task management w
 
 Current status: All endpoints functional when connected to a properly configured Task API
 Communication: Server uses standard MCP JSON protocol over stdin/stdout streams
+
+## Platform Compatibility
+The server includes special handling for cross-platform compatibility:
+
+### Windows-specific Accommodations
+- **HTTP Headers**: Uses different headers on Windows for reliable API communication
+  - Sets `Connection: close` to prevent connection reuse issues 
+  - Uses `Cache-Control: no-cache` to bypass potential caching problems
+  - Specifies explicit charset in Content-Type: `application/json; charset=utf-8`
+- **Request Configuration**: 
+  - Longer timeouts (20000ms vs 10000ms)
+  - Disables automatic redirects and decompression
+  - Custom transformation for proper JSON encoding
+- **Response Handling**:
+  - Flexible task data extraction to handle different response formats
+  - More robust error handling with platform-specific details
+  - Enhanced logging for Windows-specific troubleshooting
+
+### Testing
+- Run tests on both Windows and WSL/Linux to ensure cross-platform functionality
+- Check log files (`api_debug.log` and `api_error.log`) for platform-specific issues
+- Windows tests may require different environment configurations
