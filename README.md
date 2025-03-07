@@ -1,268 +1,320 @@
-# MCP Task Management API
+# Task API Server - MCP TypeScript Implementation
 
-![](https://img.shields.io/badge/Node.js-18%2B-brightgreen?style=flat-square) ![](https://img.shields.io/badge/MCP-Enabled-blue?style=flat-square)
-
-A Model Context Protocol (MCP) implementation for task management, designed to be used as a tool by AI assistants and chatbots.
+A Model Context Protocol (MCP) implementation for Task Management API written in TypeScript. This project serves as both a reference implementation and a functional task management server.
 
 ## Overview
 
-This project provides a complete MCP server that wraps a Task Management API, allowing AI models to:
+This MCP server connects to an external Task API service and provides a standardized interface for task management. It supports two runtime modes:
 
-- List, create, update, and delete tasks
-- Filter tasks by status and priority
-- Process natural language task descriptions
-- Generate task reports and insights
+1. **STDIO Mode**: Standard input/output communication for CLI-based applications and AI agents
+2. **HTTP+SSE Mode**: Web-accessible server with Server-Sent Events for browser and HTTP-based clients
 
-The server follows the MCP standard, making it easy for AI models to discover capabilities and interact with the task management system.
+The server offers a complete set of task management operations, extensive validation, and robust error handling.
 
-## Quick Start
+## Features
 
-```bash
-# Install dependencies
-npm install
+- **Task Management Operations**:
+  - List existing tasks with filtering capabilities
+  - Create new tasks with customizable properties
+  - Update task details (description, status, category, priority)
+  - Delete tasks when completed or no longer needed
 
-# Configure environment variables
-cp .env.example .env
-# Edit .env file with your API key and configuration
+- **Dual Interface Modes**:
+  - STDIO protocol support for command-line and AI agent integration
+  - HTTP+SSE protocol with web interface for browser-based access
 
-# Start the MCP server
+- **MCP Protocol Implementation**:
+  - Complete implementation of the Model Context Protocol
+  - Resources for task data structures
+  - Tools for task operations
+  - Error handling and informative messages
+
+- **Quality Assurance**:
+  - Comprehensive test client for validation
+  - Automatic server shutdown after tests complete
+  - Detailed validation of API responses
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js 16.x or higher
+- npm or pnpm package manager
+
+### Installation
+
+1. Clone the repository:
+   ```
+   git clone https://github.com/yourusername/mcp-template-ts.git
+   cd mcp-template-ts
+   ```
+
+2. Install dependencies:
+   ```
+   npm install
+   ```
+   or using pnpm:
+   ```
+   pnpm install
+   ```
+
+3. Create an `.env` file with your Task API credentials:
+   ```
+   TASK_MANAGER_API_BASE_URL=https://your-task-api-url.com/api
+   TASK_MANAGER_API_KEY=your_api_key_here
+   TASK_MANAGER_HTTP_PORT=3000
+   ```
+
+4. Build the project:
+   ```
+   npm run build
+   ```
+
+### Running the Server
+
+#### STDIO Mode (for CLI/AI integration)
+
+```
 npm start
+```
+or
+```
+node dist/index.js
+```
 
-# Run tests
+#### HTTP Mode (for web access)
+
+```
+npm run start:http
+```
+or
+```
+node dist/http-server.js
+```
+
+By default, the HTTP server runs on port 3000. You can change this by setting the `TASK_MANAGER_HTTP_PORT` environment variable.
+
+### Testing
+
+Run the comprehensive test suite to verify functionality:
+
+```
 npm test
 ```
 
-## Integration with AI Chat Models
+This will:
+1. Build the project
+2. Start a server instance
+3. Connect a test client to the server
+4. Run through all task operations
+5. Verify correct responses
+6. Automatically shut down the server
 
-### Option 1: Direct MCP Communication
+## Using the MCP Client
 
-AI systems that support MCP protocols can connect directly to the server.
+### STDIO Client
 
-### Option 2: Tool Implementation for AI Models
+To connect to the STDIO server from your application:
 
-To implement the Task API as a tool for AI models like Claude or GPT:
+```typescript
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import * as path from 'path';
 
-1. **Create a Tool Definition**:
+// Create transport
+const transport = new StdioClientTransport({
+  command: 'node',
+  args: [path.resolve('path/to/dist/index.js')]
+});
 
-```javascript
-const taskApiTool = {
-  name: "task_manager",
-  description: "Manage tasks including creating, updating, listing, and deleting tasks",
-  input_schema: {
-    type: "object",
-    properties: {
-      action: {
-        type: "string",
-        enum: ["list", "create", "update", "delete"],
-        description: "The action to perform"
-      },
-      taskId: {
-        type: "number",
-        description: "Task ID for update/delete operations"
-      },
-      task: {
-        type: "string",
-        description: "Task description for create/update operations"
-      },
-      category: {
-        type: "string",
-        description: "Task category for create/update operations"
-      },
-      priority: {
-        type: "string",
-        enum: ["low", "medium", "high"],
-        description: "Task priority level"
-      },
-      status: {
-        type: "string",
-        enum: ["not_started", "started", "done"],
-        description: "Task status"
-      }
-    },
-    required: ["action"]
+// Initialize client
+const client = new Client(
+  {
+    name: "your-client-name",
+    version: "1.0.0"
+  },
+  {
+    capabilities: {
+      prompts: {},
+      resources: {},
+      tools: {}
+    }
   }
-};
+);
+
+// Connect to server
+await client.connect(transport);
+
+// Example: List all tasks
+const listTasksResult = await client.callTool({
+  name: "listTasks",
+  arguments: {}
+});
+
+// Example: Create a new task
+const createTaskResult = await client.callTool({
+  name: "createTask",
+  arguments: {
+    task: "Complete project documentation",
+    category: "Documentation",
+    priority: "high"
+  }
+});
+
+// Clean up when done
+await client.close();
 ```
 
-2. **Create Tool Handler Function**:
+### HTTP Client
 
-```javascript
-import { spawn } from 'child_process';
-import { promisify } from 'util';
+To connect to the HTTP server from a browser:
 
-async function handleTaskManagerTool(params) {
-  const { action, ...taskParams } = params;
-  
-  // Map action to MCP tool
-  let mcpTool;
-  switch(action) {
-    case 'list': mcpTool = 'listTasks'; break;
-    case 'create': mcpTool = 'createTask'; break;
-    case 'update': mcpTool = 'updateTask'; break;
-    case 'delete': mcpTool = 'deleteTask'; break;
-    default: throw new Error(`Unknown action: ${action}`);
-  }
-  
-  // Create MCP request
-  const mcpRequest = {
-    type: 'invoke',
-    tool: mcpTool,
-    parameters: taskParams,
-    id: Date.now().toString()
-  };
-  
-  // Execute MCP request
-  const serverProcess = spawn('node', ['task-manager-mcp-server.js']);
-  serverProcess.stdin.write(JSON.stringify(mcpRequest) + '\n');
-  
-  // Wait for response and return results
-  // Implementation details...
-}
+```html
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Task Manager</title>
+  <script type="module">
+    import { Client } from 'https://cdn.jsdelivr.net/npm/@modelcontextprotocol/sdk/dist/esm/client/index.js';
+    import { SSEClientTransport } from 'https://cdn.jsdelivr.net/npm/@modelcontextprotocol/sdk/dist/esm/client/sse.js';
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      // Create transport
+      const transport = new SSEClientTransport('http://localhost:3000/mcp');
+      
+      // Initialize client
+      const client = new Client(
+        {
+          name: "browser-client",
+          version: "1.0.0"
+        },
+        {
+          capabilities: {
+            prompts: {},
+            resources: {},
+            tools: {}
+          }
+        }
+      );
+
+      // Connect to server
+      await client.connect(transport);
+      
+      // Now you can use client.callTool() for tasks
+    });
+  </script>
+</head>
+<body>
+  <h1>Task Manager</h1>
+  <!-- Your interface elements here -->
+</body>
+</html>
 ```
 
-3. **Register Tool with AI Model API**:
+## Available Tools
 
-Implementation varies by AI provider. Here's an example using Claude:
+### listTasks
 
-```javascript
-const response = await client.messages.create({
-  model: "claude-3-opus-20240229",
-  max_tokens: 1000,
-  system: `You are an assistant with access to a task management system. 
-  When users ask about creating, viewing, updating, or deleting tasks, use the task_manager tool.
-  
-  Task properties:
-  - task: The description of what needs to be done
-  - category: The category the task belongs to (e.g., "Development", "Marketing")
-  - priority: How important the task is ("low", "medium", "high")
-  - status: Current state of the task ("not_started", "started", "done")
-  
-  For creating tasks, you MUST use the task_manager tool with action="create".
-  For listing tasks, you MUST use the task_manager tool with action="list".
-  For updating tasks, you MUST use the task_manager tool with action="update".
-  For deleting tasks, you MUST use the task_manager tool with action="delete".
-  
-  When creating or updating tasks:
-  1. Always extract the task description, category, and priority from the user's request
-  2. If the user doesn't specify a category, ask them for one
-  3. If the user doesn't specify a priority, default to "medium"
-  4. Provide a clear confirmation after the operation succeeds`,
-  messages: [
-    { role: "user", content: "Create a task to implement user authentication for the website. It's high priority." }
-  ],
-  tools: [taskApiTool]
+Lists all available tasks.
+
+```typescript
+const result = await client.callTool({
+  name: "listTasks",
+  arguments: {
+    // Optional filters
+    status: "pending", // Filter by status
+    category: "Work",  // Filter by category
+    priority: "high"   // Filter by priority
+  }
 });
 ```
 
-### Sample System Instructions for AI Models
+### createTask
 
-#### Basic Task Management
+Creates a new task.
 
-```
-You have access to a task management system through the task_manager tool. 
-Use this tool whenever users want to:
-- Create new tasks
-- List existing tasks
-- Update task details (description, category, priority, status)
-- Delete tasks
-
-ALWAYS use the task_manager tool for these operations rather than simulating them.
-
-When users ask to create a task:
-1. Extract the task details (description, category, priority, status)
-2. Use the tool with action="create" and the extracted parameters
-3. Confirm the task was created successfully and mention the task ID
-
-When users ask to list tasks:
-1. Determine if they want to filter by status or priority
-2. Use the tool with action="list" and any filter parameters
-3. Present the results in a clear, organized format
-
-When users ask to update a task:
-1. Determine which task to update (by ID)
-2. Extract the fields to update
-3. Use the tool with action="update", the task ID, and the fields to update
-4. Confirm the update was successful
-
-When users ask to delete a task:
-1. Confirm they want to delete the task
-2. Use the tool with action="delete" and the task ID
-3. Confirm the deletion was successful
+```typescript
+const result = await client.callTool({
+  name: "createTask",
+  arguments: {
+    task: "Complete the project report",  // Required: task description
+    category: "Work",                     // Optional: task category
+    priority: "high"                      // Optional: low, medium, high
+  }
+});
 ```
 
-#### Advanced Task Management
+### updateTask
 
-```
-You have access to a task management system through the task_manager tool.
+Updates an existing task.
 
-IMPORTANT GUIDELINES:
-1. ALWAYS use the task_manager tool for task operations - never pretend to create or modify tasks.
-2. Extract detailed information from user requests to make the tasks specific and actionable.
-3. When task details are ambiguous, ask clarifying questions before using the tool.
-4. After each operation, provide a clear confirmation including relevant details.
-5. For listing operations, organize the information in a helpful way based on what the user is looking for.
-
-TASK CREATION PROTOCOL:
-When users want to create a task, follow these steps:
-1. Extract the core task description, category, and priority from their request
-2. If any essential details are missing, ask for clarification
-3. Use action="create" with the parameters
-4. Confirm creation with task ID and summary
-
-TASK LISTING PROTOCOL:
-When users ask about existing tasks:
-1. Determine if they want specific filtering (status, priority, category)
-2. Use action="list" with appropriate filters
-3. Present the results in the most relevant format:
-   - If few tasks, show full details
-   - If many tasks, group by category or status
-   - If looking for specific priority, highlight important fields
-   - Include task IDs so they can be referenced for updates
-
-TASK UPDATE PROTOCOL:
-For task updates:
-1. Verify the task ID to update
-2. Extract only the fields that should change
-3. Use action="update" with taskId and changed fields only
-4. Confirm the specific changes made
-
-TASK DELETION PROTOCOL:
-For task deletion:
-1. Always confirm deletion intent if not explicitly clear
-2. Use action="delete" with the task ID
-3. Acknowledge the deletion and mention what was deleted
-
-Remember that tasks have these properties: task (description), category, priority ("low", "medium", "high"), and status ("not_started", "started", "done").
+```typescript
+const result = await client.callTool({
+  name: "updateTask",
+  arguments: {
+    taskId: 123,                       // Required: ID of task to update
+    task: "Updated task description",  // Optional: new description
+    status: "done",                    // Optional: pending, started, done
+    category: "Personal",              // Optional: new category
+    priority: "medium"                 // Optional: low, medium, high
+  }
+});
 ```
 
-## Architecture
+### deleteTask
 
-The MCP Task API implementation consists of:
+Deletes a task.
 
-1. **MCP Server (`task-manager-mcp-server.js`)**: Implements the Model Context Protocol interface
-2. **Task API Client**: Communicates with the external Task API service
-3. **Resources**: Exposes task collections and individual tasks
-4. **Tools**: Provides task CRUD operations
-5. **Prompts**: Natural language interactions for common operations
-6. **Test Client**: Verifies correct operation of the MCP server
-
-## Documentation
-
-- [MCP-TASKAPI-DOCUMENTATION.md](./MCP-TASKAPI-DOCUMENTATION.md) - Comprehensive integration guide
-- [README-TESTING.md](./README-TESTING.md) - Testing procedures and information
-
-## Dependencies
-
-```json
-"dependencies": {
-  "@modelcontextprotocol/sdk": "^1.6.1",
-  "axios": "^1.8.1",
-  "dotenv": "^16.4.5",
-  "uuid": "^9.0.1",
-  "zod": "^3.24.2"
-}
+```typescript
+const result = await client.callTool({
+  name: "deleteTask",
+  arguments: {
+    taskId: 123  // Required: ID of task to delete
+  }
+});
 ```
+
+## Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| TASK_MANAGER_API_BASE_URL | URL for the external Task API | None (Required) |
+| TASK_MANAGER_API_KEY | API key for authentication | None (Required) |
+| TASK_MANAGER_HTTP_PORT | Port for the HTTP server | 3000 |
+| PORT | Alternative port name (takes precedence) | None |
+
+## Project Structure
+
+```
+mcp-template-ts/
+├── dist/               # Compiled JavaScript files
+├── src/                # TypeScript source files
+│   ├── index.ts        # STDIO server entry point
+│   ├── http-server.ts  # HTTP+SSE server entry point
+│   ├── test-client.ts  # Test client implementation
+├── .env                # Environment variables
+├── package.json        # Project dependencies
+├── tsconfig.json       # TypeScript configuration
+└── README.md           # Project documentation
+```
+
+## Development
+
+1. Start the TypeScript compiler in watch mode:
+   ```
+   npm run watch
+   ```
+
+2. Run tests to verify changes:
+   ```
+   npm test
+   ```
 
 ## License
 
-[MIT](LICENSE.md)
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Acknowledgments
+
+- This project uses the [@modelcontextprotocol/sdk](https://github.com/modelcontextprotocol/sdk) for MCP protocol implementation
+- Built for integration with AI tooling and web applications

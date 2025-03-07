@@ -1,23 +1,37 @@
 {
-  "name": "mcp-task-api",
+  "name": "Task API Server",
   "version": "1.0.0",
-  "description": "MCP Task API Server and Test Client",
+  "description": "Task API Server TypeScript",
+  "license": "MIT",
+  "author": "MCPAI.io",
   "type": "module",
-  "main": "task-manager-mcp-server.js",
+  "bin": {
+    "mcp-template-ts": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
-    "start": "node task-manager-mcp-server.js",
-    "http": "node mcp-http-server.js",
-    "test": "node mcp-client-test.js"
+    "build": "tsc && shx chmod +x dist/*.js",
+    "prepare": "npm run build",
+    "watch": "tsc --watch",
+    "test": "tsc && shx chmod +x dist/*.js && node dist/test-client.js",
+    "start": "node dist/index.js",
+    "start:http": "node dist/http-server.js"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.6.1",
+    "@modelcontextprotocol/sdk": "^1.6.0",
     "axios": "^1.8.1",
-    "dotenv": "^16.4.5",
-    "mcp": "^1.4.0",
-    "uuid": "^9.0.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^5.0.1",
     "zod": "^3.24.2"
   },
-  "engines": {
-    "node": ">=18.0.0"
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.13.9",
+    "shx": "^0.3.4",
+    "typescript": "^5.7.3"
   }
 }
