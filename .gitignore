@@ -20,6 +20,8 @@ yarn-debug.log*
 yarn-error.log*
 api_debug.log
 api_error.log
+server_debug.txt
+server_error.txt
 
 # Testing
 test-reports/
